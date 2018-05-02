@@ -66,6 +66,11 @@ https://github.com/jobandtalent/dkron-rb
 - Twitter: [@dkronio](https://twitter.com/dkronio) or [@victorcoder](https://twitter.com/victorcoder)
 - Email: victor at victorcastell.com
 
+
+## BUG to fix
+
+1. 当一个job失败后变成运行中状态，不能再恢复重新运行
+
 # Sponsor
 
 This project is possible thanks to the Support of Jobandtalent

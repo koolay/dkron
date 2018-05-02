@@ -15,3 +15,5 @@ main
 .glide
 config/
 .idea/
+dkron.toml
+debug

@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/armon/circbuf"
 	"github.com/hashicorp/serf/serf"
@@ -64,6 +66,9 @@ func (a *AgentCommand) invokeJob(job *Job, execution *Execution) error {
 		return err
 	}
 
+	if len(rpcServer) == 0 {
+		return errors.Errorf("invoke job failed. got empty addr of rpcServer")
+	}
 	rc := &RPCClient{ServerAddr: string(rpcServer)}
 	return rc.callExecutionDone(execution)
 }

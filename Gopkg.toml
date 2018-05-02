@@ -82,3 +82,11 @@
 [[override]]
   name = "github.com/ugorji/go"
   revision = "f1f1a805ed361a0e078bb537e4ea78cd37dcf065"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/streadway/amqp"
+
+[[constraint]]
+  name = "upper.io/db.v3"
+  version = "3.5.2"

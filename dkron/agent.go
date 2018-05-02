@@ -21,6 +21,7 @@ import (
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/serf/serf"
 	"github.com/mitchellh/cli"
+	"github.com/victorcoder/dkron/trigger"
 )
 
 const (
@@ -338,6 +339,28 @@ func (a *AgentCommand) startServer() {
 	a.HTTPTransport.ServeHTTP()
 	listenRPC(a)
 	a.participate()
+
+	// initialize triggers
+	triggerConfig := &trigger.Configuration{
+		RabbitMQ: trigger.RabbitMQConfiguration{
+			URI:       a.config.RabitMQ.URI,
+			QueueName: "Flow",
+		},
+	}
+	for kind, supported := range supportedTriggers {
+		if supported {
+			tr, err := trigger.NewTrigger(log.Logger, triggerConfig, kind)
+			err = tr.Initialize()
+			if err != nil {
+				log.Fatalf("Failed to initialize trigger %s", kind)
+			}
+			err = tr.Start()
+			if err != nil {
+				log.Fatalf("Failed to start trigger %s. err: %s", kind, err.Error())
+			}
+			log.WithFields(logrus.Fields{"kind": kind, "config": triggerConfig}).Debug("Trigger: starting")
+		}
+	}
 }
 
 // handleSignals blocks until we get an exit-causing signal

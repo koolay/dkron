@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+var supportedTriggers = map[string]bool{"rabbitmq": true}
+
 // Config stores all configuration options for the dkron package.
 type Config struct {
 	NodeName              string
@@ -60,6 +62,15 @@ type Config struct {
 	// It is a list of strings, where each string looks like "my_tag_name:my_tag_value"
 	DogStatsdTags []string
 	StatsdAddr    string
+
+	// Triggers supported trigger: rabbitmq
+	Triggers []string
+
+	RabitMQ *RabitMQConfig
+}
+
+type RabitMQConfig struct {
+	URI string // amqp://guest:guest@localhost:5672/
 }
 
 // DefaultBindPort is the default port that dkron will use for Serf communication
@@ -69,8 +80,9 @@ func init() {
 	viper.SetConfigName("dkron")        // name of config file (without extension)
 	viper.AddConfigPath("/etc/dkron")   // call multiple times to add many search paths
 	viper.AddConfigPath("$HOME/.dkron") // call multiple times to add many search paths
-	viper.AddConfigPath("./config")     // call multiple times to add many search paths
+	viper.AddConfigPath(".")            // call multiple times to add many search paths
 	viper.SetEnvPrefix("dkron")         // will be uppercased automatically
+	viper.SetConfigType("toml")
 	viper.AutomaticEnv()
 }
 
@@ -79,10 +91,13 @@ func init() {
 func NewConfig(args []string, version string) *Config {
 	cmdFlags := configFlagSet()
 
-	ignore := args[len(args)-1] == "ignore"
-	if ignore {
-		args = args[:len(args)-1]
-		cmdFlags.SetOutput(ioutil.Discard)
+	var ignore bool
+	if len(args) > 0 {
+		ignore := args[len(args)-1] == "ignore"
+		if ignore {
+			args = args[:len(args)-1]
+			cmdFlags.SetOutput(ioutil.Discard)
+		}
 	}
 
 	if err := cmdFlags.Parse(args); err != nil {
@@ -158,6 +173,7 @@ func configFlagSet() *flag.FlagSet {
 	var dogStatsdTags []string
 	cmdFlags.Var((*AppendSliceValue)(&dogStatsdTags), "dog-statsd-tags", "Datadog tags, specified as key:value")
 	cmdFlags.String("statsd-addr", "", "Statsd Address")
+	cmdFlags.String("trigger", "", "supported trigger of job")
 
 	return cmdFlags
 }
@@ -188,6 +204,20 @@ func readConfig(version string) *Config {
 		tags["dkron_server"] = "true"
 	}
 	tags["dkron_version"] = version
+
+	triggerStr := viper.GetString("trigger")
+	triggers := strings.Split(triggerStr, ",")
+	for _, tr := range triggers {
+		if _, ok := supportedTriggers[strings.ToLower(tr)]; !ok {
+			logrus.Fatalf("config: Not supported trigger %s", tr)
+		}
+		supportedTriggers[tr] = true
+	}
+	rabbitMQConfig := &RabitMQConfig{}
+	// init rabbitMQ config if need
+	if val, ok := supportedTriggers["rabbitmq"]; ok && val {
+		rabbitMQConfig.URI = viper.GetString("rabbitmq.uri")
+	}
 
 	InitLogger(viper.GetString("log_level"), nodeName)
 
@@ -224,6 +254,7 @@ func readConfig(version string) *Config {
 		DogStatsdAddr: viper.GetString("dog_statsd_addr"),
 		DogStatsdTags: viper.GetStringSlice("dog_statsd_tags"),
 		StatsdAddr:    viper.GetString("statsd_addr"),
+		RabitMQ:       rabbitMQConfig,
 	}
 }
 

@@ -124,6 +124,8 @@ func (j *Job) Run() {
 			// Simple execution wrapper
 			ex := NewExecution(j.Name)
 			j.Agent.RunQuery(ex)
+		} else {
+			log.Infof("job has invoked. skip this now!")
 		}
 	}
 }
@@ -233,6 +235,7 @@ func (j *Job) Unlock() error {
 	return nil
 }
 
+// TODO: fix concurrency bug
 func (j *Job) isRunnable() bool {
 	status := j.Status()
 
