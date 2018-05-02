@@ -20,7 +20,7 @@
                 "-node-name=01", 
                 "-backend=consul",
                 "-backend-machine=127.0.0.1:8500",
-                "-trigger=rabbitmq"
+                // "-trigger=rabbitmq"
             ],
             "showLog": true
         }
