@@ -2,6 +2,7 @@ package dkron
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -16,7 +17,7 @@ type Execution struct {
 	// When the execution finished running.
 	FinishedAt time.Time `json:"finished_at,omitempty"`
 
-	// If this execution executed succesfully.
+	// If this execution executed successfully.
 	Success bool `json:"success,omitempty"`
 
 	// Partial output of the execution.
@@ -44,6 +45,10 @@ func NewExecution(jobName string) *Execution {
 // Key wil generate the execution Id for an execution.
 func (e *Execution) Key() string {
 	return fmt.Sprintf("%d-%s", e.StartedAt.UnixNano(), e.NodeName)
+}
+
+func (e *Execution) GetGroup() string {
+	return strconv.FormatInt(e.Group, 10)
 }
 
 // ExecList stores a slice of Executions.

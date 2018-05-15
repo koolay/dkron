@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -66,11 +65,18 @@ type Config struct {
 	// Triggers supported trigger: rabbitmq
 	Triggers []string
 
-	RabitMQ *RabitMQConfig
+	RabitMQ  *RabitMQConfig
+	Database *DBConfig
 }
 
+// RabitMQConfig rabbitMQ configuration
 type RabitMQConfig struct {
 	URI string // amqp://guest:guest@localhost:5672/
+}
+
+// DBConfig configuration of database
+type DBConfig struct {
+	URI string
 }
 
 // DefaultBindPort is the default port that dkron will use for Serf communication
@@ -90,24 +96,9 @@ func init() {
 // the command line and any file configs.
 func NewConfig(args []string) *Config {
 	cmdFlags := ConfigFlagSet()
-
-	var ignore bool
-	if len(args) > 0 {
-		ignore := args[len(args)-1] == "ignore"
-		if ignore {
-			args = args[:len(args)-1]
-			cmdFlags.SetOutput(ioutil.Discard)
-		}
-	}
-
 	if err := cmdFlags.Parse(args); err != nil {
-		if ignore {
-			log.WithError(err).Error("agent: Error parsing flags")
-		} else {
-			log.Info("agent: Ignoring flag parse errors")
-		}
+		log.WithError(err).Error("agent: Error parsing flags")
 	}
-
 	cmdFlags.VisitAll(func(f *flag.Flag) {
 		v := strings.Replace(f.Name, "-", "_", -1)
 		if f.Value.String() != f.DefValue {
@@ -202,6 +193,8 @@ func ReadConfig() *Config {
 
 	if server {
 		tags["dkron_server"] = "true"
+	} else {
+		tags["dkron_server"] = "false"
 	}
 	tags["dkron_version"] = Version
 
@@ -221,6 +214,9 @@ func ReadConfig() *Config {
 	if val, ok := supportedTriggers["rabbitmq"]; ok && val {
 		rabbitMQConfig.URI = viper.GetString("rabbitmq.uri")
 	}
+
+	dbConfig := &DBConfig{}
+	dbConfig.URI = viper.GetString("database.uri")
 
 	InitLogger(viper.GetString("log_level"), nodeName)
 

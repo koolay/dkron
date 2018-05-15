@@ -25,17 +25,17 @@ func TestStore(t *testing.T) {
 	}
 
 	// Check that we still get an empty job list
-	jobs, err := s.GetJobs()
+	jobs, err := s.GetJobs(nil)
 	if err != nil {
 		t.Fatalf("error getting jobs: %s", err)
 	}
 	assert.NotNil(t, jobs, "jobs nil, expecting empty slice")
 
-	if err := s.SetJob(testJob, nil); err != nil {
+	if err := s.SetJob(testJob, true); err != nil {
 		t.Fatalf("error creating job: %s", err)
 	}
 
-	jobs, err = s.GetJobs()
+	jobs, err = s.GetJobs(nil)
 	if err != nil {
 		t.Fatalf("error getting jobs: %s", err)
 	}

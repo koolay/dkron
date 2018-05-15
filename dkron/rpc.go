@@ -28,7 +28,7 @@ func (rpcs *RPCServer) GetJob(jobName string, job *Job) error {
 		"job": jobName,
 	}).Debug("rpc: Received GetJob")
 
-	j, err := rpcs.agent.Store.GetJob(jobName)
+	j, err := rpcs.agent.Store.GetJob(jobName, nil)
 	if err != nil {
 		return err
 	}
@@ -51,8 +51,11 @@ func (rpcs *RPCServer) ExecutionDone(execution Execution, reply *serf.NodeRespon
 		"job":   execution.JobName,
 	}).Debug("rpc: Received execution done")
 
+retry:
 	// Load the job from the store
-	job, err := rpcs.agent.Store.GetJob(execution.JobName)
+	job, jkv, err := rpcs.agent.Store.GetJobWithKVPair(execution.JobName, &JobOptions{
+		ComputeStatus: true,
+	})
 	if err != nil {
 		if err == store.ErrKeyNotFound {
 			log.Warning(ErrExecutionDoneForDeletedJob)
@@ -60,10 +63,6 @@ func (rpcs *RPCServer) ExecutionDone(execution Execution, reply *serf.NodeRespon
 		}
 		log.Fatal("rpc:", err)
 		return err
-	}
-	// Lock the job while editing
-	if err = job.Lock(); err != nil {
-		log.Fatal("rpc:", err)
 	}
 
 	// Get the defined output types for the job, and call them
@@ -90,13 +89,13 @@ func (rpcs *RPCServer) ExecutionDone(execution Execution, reply *serf.NodeRespon
 		job.ErrorCount++
 	}
 
-	if err := rpcs.agent.Store.SetJob(job, nil); err != nil {
-		log.Fatal("rpc:", err)
+	ok, err := rpcs.agent.Store.AtomicJobPut(job, jkv)
+	if err != nil && err != store.ErrKeyModified {
+		log.WithError(err).Fatal("rpc: Error in atomic job save")
 	}
-
-	// Release the lock
-	if err = job.Unlock(); err != nil {
-		log.Fatal("rpc:", err)
+	if !ok {
+		log.Debug("rpc: Retrying job update")
+		goto retry
 	}
 
 	reply.From = rpcs.agent.config.NodeName
@@ -130,9 +129,9 @@ func (rpcs *RPCServer) ExecutionDone(execution Execution, reply *serf.NodeRespon
 
 	// Jobs that have dependent jobs are a bit more expensive because we need to call the Status() method for every execution.
 	// Check first if there's dependent jobs and then check for the job status to begin executiong dependent jobs on success.
-	if len(job.DependentJobs) > 0 && job.Status() == Success {
+	if len(job.DependentJobs) > 0 && job.Status == StatusSuccess {
 		for _, djn := range job.DependentJobs {
-			dj, err := rpcs.agent.Store.GetJob(djn)
+			dj, err := rpcs.agent.Store.GetJob(djn, nil)
 			if err != nil {
 				return err
 			}

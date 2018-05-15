@@ -3,21 +3,9 @@ package flow
 import (
 	"context"
 
-	"github.com/pkg/errors"
-	"upper.io/db.v3/lib/sqlbuilder"
-
 	"github.com/Sirupsen/logrus"
-	"upper.io/db.v3/mysql"
+	"github.com/victorcoder/dkron/db"
 )
-
-// Configuration  configuration
-type Configuration struct {
-	Database string
-	Host     string
-	Port     int
-	User     string
-	Password string
-}
 
 // Storage storage
 type Storage interface {
@@ -26,53 +14,25 @@ type Storage interface {
 
 // MyStorage storage
 type MyStorage struct {
-	configuration *Configuration
-	settings      *mysql.ConnectionURL
-	logger        *logrus.Logger
-}
-
-func defaultSettings(configuration *Configuration) *Configuration {
-	if configuration.Port == 0 {
-		configuration.Port = 3306
-	}
-	if configuration.Host == "" {
-		configuration.Host = "localhost"
-	}
-	return configuration
-}
-
-func (p *MyStorage) conn() (sess sqlbuilder.Database, err error) {
-	p.logger.Debugf("Connect to db with settings: %+v", p.settings)
-	sess, err = mysql.Open(p.settings)
-	if err != nil {
-		err = errors.Wrap(err, "Failed to open db")
-	}
-	return
+	database db.Database
+	logger   *logrus.Logger
 }
 
 // NewStorage new storage
-func NewStorage(logger *logrus.Logger, configuration *Configuration) (*MyStorage, error) {
-	configuration = defaultSettings(configuration)
+func NewStorage(logger *logrus.Logger, database db.Database) (*MyStorage, error) {
 	storage := &MyStorage{
-		configuration: configuration,
-		settings: &mysql.ConnectionURL{
-			Database: configuration.Database,
-			Host:     configuration.Host,
-			User:     configuration.User,
-			Password: configuration.Password,
-		},
-		logger: logger,
+		database: database,
+		logger:   logger,
 	}
 	return storage, nil
 }
 
 // GetFlow get one flow by id
 func (p *MyStorage) GetFlow(id string) (*Flow, error) {
-	sess, err := p.conn()
+	sess, err := p.database.Open()
 	if err != nil {
 		return nil, err
 	}
-
 	defer sess.Close()
 	var flow Flow
 	err = sess.Collection("flow").Find("id", id).One(&flow)

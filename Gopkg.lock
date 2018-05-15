@@ -27,6 +27,7 @@
     "store",
     "store/consul",
     "store/etcd/v2",
+    "store/redis",
     "store/zookeeper"
   ]
   revision = "063d875e3c5fd734fa2aa12fac83829f62acfc70"
@@ -269,6 +270,12 @@
   revision = "525bedee691b5a8df547cb5cf9f86b7fb1883e24"
 
 [[projects]]
+  name = "github.com/mattn/go-sqlite3"
+  packages = ["."]
+  revision = "6c771bb9887719704b210e87e934f08be014bdb1"
+  version = "v1.6.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/miekg/dns"
   packages = [
@@ -487,6 +494,19 @@
   version = "v8.18.2"
 
 [[projects]]
+  name = "gopkg.in/redis.v5"
+  packages = [
+    ".",
+    "internal",
+    "internal/consistenthash",
+    "internal/hashtag",
+    "internal/pool",
+    "internal/proto"
+  ]
+  revision = "a16aeec10ff407b1e7be6dd35797ccf5426ef0f0"
+  version = "v5.2.9"
+
+[[projects]]
   branch = "v2"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
@@ -504,7 +524,8 @@
     "internal/sqladapter/exql",
     "lib/reflectx",
     "lib/sqlbuilder",
-    "mysql"
+    "mysql",
+    "sqlite"
   ]
   revision = "bba00b389f7e9cfdd8988e08c2832ab39119d7cf"
   version = "v3.5.2"
@@ -512,6 +533,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6a1a61ecc9e8459ea8e24f2fd337dcb456a81d13364ade7144ece807c6441c61"
+  inputs-digest = "74b4b2fd29c194099cfd14c307c1416987289189a2704e54fb3c981fee605f99"
   solver-name = "gps-cdcl"
   solver-version = 1

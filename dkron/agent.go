@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -29,8 +30,11 @@ var (
 
 	// ErrLeaderNotFound is returned when obtained leader from store is not found in member list
 	ErrLeaderNotFound = errors.New("No member leader found in member list")
+	ErrNoRPCAddress   = errors.New("No RPC address tag found in server")
 
 	defaultLeaderTTL = 20 * time.Second
+
+	runningExecutions sync.Map
 )
 
 type Agent struct {
@@ -190,7 +194,7 @@ func (a *Agent) setupSerf() (*serf.Serf, error) {
 			return nil, fmt.Errorf("Invalid advertise address: %s", err)
 		}
 	}
-	//Ues the value of "RPCPort" if AdvertiseRPCPort has not been set
+	//Use the value of "RPCPort" if AdvertiseRPCPort has not been set
 	if config.AdvertiseRPCPort <= 0 {
 		config.AdvertiseRPCPort = config.RPCPort
 	}
@@ -290,6 +294,10 @@ func (a *Agent) StartServer() {
 	}
 	a.HTTPTransport.ServeHTTP()
 	listenRPC(a)
+
+	if err := a.SetTags(a.config.Tags); err != nil {
+		log.WithError(err).Fatal("agent: Error setting RPC config tags")
+	}
 	a.participate()
 
 	// initialize triggers
@@ -402,8 +410,8 @@ func (a *Agent) eventLoop() {
 			metrics.IncrCounter([]string{"agent", "event_received", e.String()}, 1)
 
 			// Log all member events
-			if failed, ok := e.(serf.MemberEvent); ok {
-				for _, member := range failed.Members {
+			if me, ok := e.(serf.MemberEvent); ok {
+				for _, member := range me.Members {
 					log.WithFields(logrus.Fields{
 						"node":   a.config.NodeName,
 						"member": member.Name,
@@ -456,14 +464,20 @@ func (a *Agent) eventLoop() {
 					query.Respond(exJSON)
 				}
 
-				if query.Name == QueryRPCConfig && a.config.Server {
+				if query.Name == QueryExecutionDone {
 					log.WithFields(logrus.Fields{
 						"query":   query.Name,
 						"payload": string(query.Payload),
 						"at":      query.LTime,
-					}).Debug("agent: RPC Config requested")
+					}).Debug("agent: Execution done requested")
 
-					err := query.Respond([]byte(a.getRPCAddr()))
+					// Find if the indicated execution is done processing
+					var err error
+					if _, ok := runningExecutions.Load(string(query.Payload)); ok {
+						err = query.Respond([]byte("false"))
+					} else {
+						err = query.Respond([]byte("true"))
+					}
 					if err != nil {
 						log.WithError(err).Error("agent: query.Respond")
 					}
@@ -480,7 +494,7 @@ func (a *Agent) eventLoop() {
 // Start or restart scheduler
 func (a *Agent) schedule() {
 	log.Debug("agent: Restarting scheduler")
-	jobs, err := a.Store.GetJobs()
+	jobs, err := a.Store.GetJobs(nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -567,5 +581,41 @@ func (a *Agent) Leave() error {
 }
 
 func (a *Agent) SetTags(tags map[string]string) error {
+	if a.config.Server {
+		tags["dkron_rpc_addr"] = a.getRPCAddr()
+	}
 	return a.serf.SetTags(tags)
+}
+
+// RefreshJobStatus asks the nodes their progress on an execution
+func (a *Agent) RefreshJobStatus(jobName string) {
+	var group string
+
+	execs, _ := a.Store.GetLastExecutionGroup(jobName)
+	nodes := []string{}
+
+	for _, ex := range execs {
+		log.WithFields(logrus.Fields{
+			"member":        ex.NodeName,
+			"execution_key": ex.Key(),
+		}).Debug("agent: Asking member for pending execution")
+
+		nodes = append(nodes, ex.NodeName)
+		group = strconv.FormatInt(ex.Group, 10)
+	}
+
+	statuses := a.executionDoneQuery(nodes, group)
+
+	for _, ex := range execs {
+		if s, ok := statuses[ex.NodeName]; ok {
+			done, _ := strconv.ParseBool(s)
+			if done {
+				ex.FinishedAt = time.Now()
+				a.Store.SetExecution(ex)
+			}
+		} else {
+			ex.FinishedAt = time.Now()
+			a.Store.SetExecution(ex)
+		}
+	}
 }

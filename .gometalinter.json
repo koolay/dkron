@@ -1,0 +1,4 @@
+{
+  "Disable": ["vetshadow"],
+  "Exclude": ["exported \\w+ (\\S*['.]*)([a-zA-Z'.*]*) should have comment or be unexported"]
+}

@@ -40,11 +40,15 @@ func (a *Agent) invokeJob(job *Job, execution *Execution) error {
 			"shell":   strconv.FormatBool(job.Shell),
 			"env":     strings.Join(job.EnvironmentVariables, ","),
 		}
+		log.Warning("invoke: Deprecation waring! fields command, " +
+			"shell and environment_variables params are deprecated and will be removed in future versions. " +
+			"Consider migrating the job definition to the shell executor plugin")
 	}
 
 	// Check if executor is exists
 	if executor, ok := a.ExecutorPlugins[jex]; ok {
 		log.WithField("plugin", jex).Debug("invoke: calling executor plugin")
+		runningExecutions.Store(execution.GetGroup(), execution)
 		out, err := executor.Execute(&ExecuteRequest{
 			JobName: job.Name,
 			Config:  exc,
@@ -59,14 +63,14 @@ func (a *Agent) invokeJob(job *Job, execution *Execution) error {
 
 		output.Write(out)
 	} else {
-		log.Errorf("invoke: Specified executor %s is not present", executor)
+		log.WithField("executor", executor).Error("invoke: Specified executor is not present")
 	}
 
 	execution.FinishedAt = time.Now()
 	execution.Success = success
 	execution.Output = output.Bytes()
 
-	rpcServer, err := a.queryRPCConfig()
+	rpcServer, err := a.getServerRPCAddresFromTags()
 	if err != nil {
 		return err
 	}
@@ -74,6 +78,7 @@ func (a *Agent) invokeJob(job *Job, execution *Execution) error {
 	if len(rpcServer) == 0 {
 		return errors.Errorf("invoke job failed. got empty addr of rpcServer")
 	}
+	runningExecutions.Delete(execution.GetGroup())
 	rc := &RPCClient{ServerAddr: string(rpcServer)}
 	return rc.callExecutionDone(execution)
 }
@@ -83,6 +88,15 @@ func (a *Agent) selectServer() serf.Member {
 	server := servers[rand.Intn(len(servers))]
 
 	return server
+}
+
+func (a *Agent) getServerRPCAddresFromTags() (string, error) {
+	s := a.selectServer()
+
+	if addr, ok := s.Tags["dkron_rpc_addr"]; ok {
+		return addr, nil
+	}
+	return "", ErrNoRPCAddress
 }
 
 // Determine the shell invocation based on OS

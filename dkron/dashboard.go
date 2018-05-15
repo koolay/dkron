@@ -1,7 +1,6 @@
 package dkron
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -68,14 +67,10 @@ func (a *Agent) dashboardIndexHandler(c *gin.Context) {
 }
 
 func (a *Agent) dashboardJobsHandler(c *gin.Context) {
-	jobs, _ := a.Store.GetJobs()
-
 	data := struct {
 		Common *commonDashboardData
-		Jobs   []*Job
 	}{
 		Common: newCommonDashboardData(a, a.config.NodeName, "../../"),
-		Jobs:   jobs,
 	}
 
 	c.HTML(http.StatusOK, "jobs", data)
@@ -138,7 +133,7 @@ func CreateMyRender() multitemplate.Render {
 	return r
 }
 
-//go:generate go-bindata -prefix "../" -pkg dkron -ignore=scss -ignore=.*\.md -ignore=\.?bower\.json -ignore=\.gitignore -ignore=Makefile -ignore=examples -ignore=tutorial -ignore=tests -ignore=rickshaw\/src -o bindata.go ../static/... ../templates
+//go:generate go-bindata -prefix "../" -pkg dkron -ignore=scss -ignore=.*\.md -ignore=\.?package\.json -ignore=\.?package-lock\.json -ignore=\.gitignore -ignore=Makefile -ignore=examples -ignore=tutorial -ignore=tests -ignore=rickshaw\/src -o bindata.go ../static/... ../templates
 func servePublic(c *gin.Context) {
 	path := c.Request.URL.Path
 
@@ -180,25 +175,6 @@ func servePublic(c *gin.Context) {
 
 func funcMap() template.FuncMap {
 	funcs := template.FuncMap{
-		"executionStatus": func(job *Job) string {
-			status := job.Status()
-			switch status {
-			case Success:
-				return "success"
-			case Failed:
-				return "danger"
-			case PartialyFailed:
-				return "warning"
-			case Running:
-				return ""
-			}
-
-			return ""
-		},
-		"jobJson": func(job *Job) string {
-			j, _ := json.MarshalIndent(job, "", "\t")
-			return string(j)
-		},
 		"toString": func(value []byte) string {
 			return string(template.HTML(value))
 		},
